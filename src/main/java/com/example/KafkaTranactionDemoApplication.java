@@ -2,21 +2,14 @@ package com.example;
 
 import java.util.concurrent.TimeUnit;
 
-import javax.sql.DataSource;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
-import org.springframework.context.annotation.Primary;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import com.example.config.KafaConfiguration;
 import com.example.config.KafaEventMessageConfiguration;
@@ -32,7 +25,6 @@ import com.example.event.CustomEventListener;
 import com.example.event.CustomEventPublisher;
 
 @SpringBootApplication
-@EnableAutoConfiguration(exclude = WebMvcAutoConfiguration.class)
 @ComponentScan(basePackageClasses = { KafaTransactionConfiguration.class ,CustomEventListener.class, CustomEventPublisher.class}, 
 			   excludeFilters={ 
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaConfiguration.class),
