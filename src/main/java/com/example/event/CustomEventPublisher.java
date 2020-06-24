@@ -7,9 +7,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class CustomEventPublisher {
 	
-	CustomEventPublisher() {
-		System.out.println("in");
-	}
 	@Autowired
     private ApplicationEventPublisher applicationEventPublisher;
 	
