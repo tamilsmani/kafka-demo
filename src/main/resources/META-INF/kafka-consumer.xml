@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-kafka="http://www.springframework.org/schema/integration/kafka"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration/kafka http://www.springframework.org/schema/integration/kafka/spring-integration-kafka.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd">
+		
+		
+		<int:channel id="receiverChannel"/>
+		<int:service-activator input-channel="receiverChannel" ref="receiver" method="handleMessage"/>
+		
+	<!-- 	<int-kafka:inbound-channel-adapter
+	        id="adapter1"
+	        consumer-factory="consumerFactory"
+	        topics="${kafka.topic}"
+	        channel="receiverChannel"
+	        client-id="${kafka.topic}"
+	        group-id="${kafka.topic}"
+	        payload-type="java.lang.String"
+	        raw-header="true"
+	        auto-startup="true"
+	        >
+	    <int:poller fixed-delay="5000"/>
+	</int-kafka:inbound-channel-adapter> -->
+
+		
+		<int-kafka:message-driven-channel-adapter
+	        id="kafkaListener"
+	        listener-container="container"
+	        auto-startup="true"
+	        phase="100"
+	        send-timeout="5000"
+	        mode="record"
+	        channel="receiverChannel"
+	        error-channel="errorChannel" />
+
+ 		<bean id="consumerFactory" class="org.springframework.kafka.core.DefaultKafkaConsumerFactory">
+		            <constructor-arg><ref bean="propertiesMap"/>
+		            </constructor-arg>
+		        </bean>
+		        
+		<bean id="container" class="org.springframework.kafka.listener.KafkaMessageListenerContainer">
+		    <constructor-arg><ref bean="consumerFactory"></ref>
+		    </constructor-arg>
+		    
+		    <constructor-arg>
+		        <bean class="org.springframework.kafka.listener.ContainerProperties">
+		            <constructor-arg name="topics" value="${kafka.topic}" />
+		        </bean>
+		    </constructor-arg>
+		 </bean>
+</beans>

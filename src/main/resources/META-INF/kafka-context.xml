@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:int="http://www.springframework.org/schema/integration"
+       xmlns:int-kafka="http://www.springframework.org/schema/integration/kafka"
+       xmlns:task="http://www.springframework.org/schema/task"
+         xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/integration/kafka http://www.springframework.org/schema/integration/kafka/spring-integration-kafka.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+		
+		
+		
+		<bean id="kafkaTemplate" class="org.springframework.kafka.core.KafkaTemplate">
+		    <constructor-arg>
+		        <bean class="org.springframework.kafka.core.DefaultKafkaProducerFactory">
+		            <constructor-arg> <ref bean="propertiesMap"/>
+		                <!-- <map>
+		                    <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).BOOTSTRAP_SERVERS_CONFIG}" value="${kafka.server}"/>
+		                    <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).KEY_SERIALIZER_CLASS_CONFIG}">
+		                    		<value>org.apache.kafka.common.serialization.StringSerializer</value>
+		                    </entry>
+		                    <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).VALUE_SERIALIZER_CLASS_CONFIG}">
+		                    	<value>org.apache.kafka.common.serialization.StringSerializer</value>
+		                    </entry>
+		                    <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).KEY_DESERIALIZER_CLASS_CONFIG}">
+		                    	<value>org.apache.kafka.common.serialization.StringDeserializer</value>
+		                    </entry>
+		                    <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).VALUE_DESERIALIZER_CLASS_CONFIG}">
+		                    	<value>org.apache.kafka.common.serialization.StringDeserializer</value>
+		                    </entry>
+		                    <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).LINGER_MS_CONFIG}">
+		                    	<value>1</value>
+		                    </entry>
+		                    <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).GROUP_ID_CONFIG}" value="helloworld"/>
+		                    <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).AUTO_OFFSET_RESET_CONFIG}" value="earliest"/>
+		                </map> -->
+		            </constructor-arg>
+		        </bean>
+		    </constructor-arg>
+		</bean>
+
+		<util:map id="propertiesMap">
+		
+		      <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).BOOTSTRAP_SERVERS_CONFIG}" value="${kafka.server}"/>
+	          <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).KEY_SERIALIZER_CLASS_CONFIG}">
+	          		<value>org.apache.kafka.common.serialization.StringSerializer</value>
+	          </entry>
+	          <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).VALUE_SERIALIZER_CLASS_CONFIG}">
+	          	<value>org.apache.kafka.common.serialization.StringSerializer</value>
+	          </entry>
+	          <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).KEY_DESERIALIZER_CLASS_CONFIG}">
+	          	<value>org.apache.kafka.common.serialization.StringDeserializer</value>
+	          </entry>
+	          <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).VALUE_DESERIALIZER_CLASS_CONFIG}">
+	          	<value>org.apache.kafka.common.serialization.StringDeserializer</value>
+	          </entry>
+	          <entry key="#{ T (org.apache.kafka.clients.producer.ProducerConfig).LINGER_MS_CONFIG}">
+	          	<value>1</value>
+	          </entry>
+	          <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).GROUP_ID_CONFIG}" value="helloworld"/>
+	          <entry key="#{ T (org.apache.kafka.clients.consumer.ConsumerConfig).AUTO_OFFSET_RESET_CONFIG}" value="earliest"/>
+		
+		</util:map>
+
+</beans>

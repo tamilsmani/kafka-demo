@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-kafka="http://www.springframework.org/schema/integration/kafka"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration/kafka http://www.springframework.org/schema/integration/kafka/spring-integration-kafka.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd">
+		
+
+		<int:channel id="processChannel"/>
+		<int:channel id="inputToKafka"  />
+		
+		<int:transformer input-channel="processChannel" ref="producerTransformer" method="send" output-channel="inputToKafka"/>
+		
+		<int:service-activator input-channel="inputToKafka" ref="producerTransformer" method="process"/>
+		
+		<int-kafka:outbound-channel-adapter id="kafkaOutboundChannelAdapter"
+                                    kafka-template="kafkaTemplate"
+                                    auto-startup="false"
+                                    channel="inputToKafka"
+                                    sync="false"
+                                    message-key-expression="'demo-key'"
+                                    send-failure-channel="errorChannel"
+                                    send-success-channel="nullChannel"
+                                    partition-id-expression="0">
+                                    
+     <!--                                <bean class="org.springframework.integration.kafka.outbound.KafkaProducerMessageHandler">
+        <constructor-arg ref="template"/>
+        <property name="topicExpression">
+            <bean class="org.springframework.expression.common.LiteralExpression">
+                <constructor-arg value="foo"/>
+            </bean>
+        </property>
+        <property name="messageKeyExpression">
+            <bean class="org.springframework.expression.common.LiteralExpression">
+                <constructor-arg value="bar"/>
+            </bean>
+        </property>
+        <property name="sync" value="false"/> -->
+		</int-kafka:outbound-channel-adapter>
+		
+	<!-- 	<int-kafka:producer-context id="kafkaProducerContext">
+	        <int-kafka:producer-configurations>
+	            <int-kafka:producer-configuration broker-list="localhost:9092"
+	                       key-class-type="java.lang.String"
+	                       value-class-type="java.lang.String"
+	                       topic="${kafka.topic}"
+	                       value-serializer="kafkaSerializer"
+	                       key-serializer="kafkaSerializer"
+	                       compression-type="none"/>
+	        </int-kafka:producer-configurations>
+    </int-kafka:producer-context> -->
+    
+</beans>

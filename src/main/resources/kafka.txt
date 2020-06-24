@@ -1,0 +1,676 @@
+	
+1). Start Zookeeper
+	./zookeeper-server-start.sh config/zookeeper.properties
+	
+2). Kafa Server
+	./kafka-server-start.sh config/server.properties
+
+3). Create a topic (Single Node Cluster)
+	./kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 3 --partitions 1 --topic single-partition-2-concurrent-consumer
+	
+4). Get list of Topics
+	./kafka-topics.sh --list --bootstrap-server localhost:9092
+
+5). pusblishing a message
+	./kafka-console-producer.sh --broker-list localhost:9092 --topic single-partition-2-concurrent-consumer
+
+6). Consume a message
+	./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic my-replicated-demo-topic --from-beginning
+
+7). Delete topic
+	./kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic my-replicated-demo-topic 
+	
+	//--zookeeper localhost:2181 
+
+8). Get current offset of any TOPIC
+	./kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list localhost:9092 --topic single-partition-2-concurrent-consumer
+	
+9). Change partitions count
+	./kafka-topics.sh --zookeeper localhost:2181 --alter --topic single-partition-2-concurrent-consumer  --partitions 2 
+
+10). Describe Topic
+	./kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic price-promotion-event-topic
+	
+Multi Node cluster - Setup
+------------------------------------
+1).	Copy an existing server.properties according to your no of cluster you need. 
+	cp config/server.properties config/server-1.properties
+
+2). Change below config in each properties
+	broker.id=1 (It should be unqiue number in each node in the cluster)
+    listeners=PLAINTEXT://:9093
+    log.dirs=/tmp/kafka-logs-1
+
+3). Now start your cluster
+	-> bin/kafka-server-start.sh config/server-1.properties &
+
+	-> bin/kafka-server-start.sh config/server-2.properties &
+	
+4). Create a topic in your cluster
+	./kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 3 --partitions 3 --topic my-replicated-demo-topic
+
+5). To get the created cluster info
+ 	./kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic single-partition-2-concurrent-consumer
+	
+	
+	
+	Output: (1-st Line is summary of all Partitions & Each line below gives summary of each parition)
+	------------------------------------------------------------------------------------------------------
+	> selvanta@INMLP3JAHTD8 bin % ./kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic my-replicated-demo-topic 
+		
+		Topic: my-replicated-demo-topic	PartitionCount: 3	ReplicationFactor: 3	Configs: segment.bytes=1073741824
+	
+			Topic: my-replicated-demo-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
+			Topic: my-replicated-demo-topic	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
+			Topic: my-replicated-demo-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+		
+		
+	Leader - Tell the info of who is the leder of for the partition and it is responsible for all R/W
+	Replicas - Replications of partition and first one is Leader and rest all are followers
+	isr - In-syn-replica - For each paritions, which nodes are maintains the replica datas and the datas are sync in those nodes.
+	
+		Summary -> 	P0- Leader is on Node 0 in the cluster & Replicas are 0 (leader),2(follower),1(follower)
+					P1- Leader is on Node 2 in the cluster & Replicas are 2 (leader),1(follower),0(follower)
+					P2- Leader is on Node 1 in the cluster & Replicas are 1 (leader),0(follower),2(follower)
+		
+6). Fault Tolerance test
+--------------------------
+1). Current replica details
+	> selvanta@INMLP3JAHTD8 bin % ./kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic my-replicated-demo-topic 
+		
+		Topic: my-replicated-demo-topic	PartitionCount: 3	ReplicationFactor: 3	Configs: segment.bytes=1073741824
+	
+			Topic: my-replicated-demo-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
+			Topic: my-replicated-demo-topic	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
+			Topic: my-replicated-demo-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+
+2). Kill server1
+	> ps aux | grep server-1.properties
+	> kill -9 XXXXXX
+	> ./kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic my-replicated-demo-topic
+
+		Topic: my-replicated-demo-topic PartitionCount: 3 ReplicationFactor: 3 Configs: segment.bytes=1073741824
+			Topic: my-replicated-demo-topic Partition: 0 Leader: 0 Replicas: 0,2,1 Isr: 0,2
+			Topic: my-replicated-demo-topic Partition: 1 Leader: 2 Replicas: 2,1,0 Isr: 2,0
+			Topic: my-replicated-demo-topic Partition: 2 Leader: 0 Replicas: 1,0,2 Isr: 0,2
+	
+	Summary
+	---------
+	   > We killed the Node 1 (server-1.properties) in the cluster
+	   > The P2 which was originally assigned with Node-1 is reassinged to N-0 and it updates in ISR. The Replicas tells the info initial config(what was the replica config when it was created.)
+
+6.1.) Event Listener
+--------------------------
+@EventListener
+	//(condition = "event.listenerId.startsWith('qux-')")
+    public void eventHandler(ListenerContainerIdleEvent event) {
+		LOGGER.info(">>>  Event Received topic[{}] and event[{}]",topic, event);
+    }
+6.2).  Payload Validation
+-------------------------------
+	- Payload can be validated like MVC Validator
+	
+	- Class should implement  KafkaListenerConfigurer - Interface
+		@Override
+		    public void configureKafkaListeners(KafkaListenerEndpointRegistrar registrar) {
+		      registrar.setValidator(new CustomValidator());
+		    }="
+	- public class CustomValidator implements Validator 
+	
+
+6.3). Interceptor - During the message send, onAcknowledgement,onCommit, consume method get intercepted.
+--------------------------------------------------------------------------------
+
+// Interceptor config
+		configMap.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, Interceptor.class.getName());
+		configMap.put("producer.bean", new InterceptorBean());
+		configMap.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, Interceptor.class.getName());
+		configMap.put("consumer.bean", new InterceptorBean());
+- public class Interceptor implements ProducerInterceptor<String,String>, ConsumerInterceptor<String,String>
+- public class InterceptorBean {
+	private static final Logger LOGGER = LoggerFactory.getLogger(InterceptorBean.class);
+	
+	public void display(String where) {
+		LOGGER.info("Called from [{}]",where);
+	}
+}
+
+6.4) Serializer & Deserializor
+----------------------------------
+	- Config
+		configMap.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, CustomEventMessageSerializer.class);
+			-> public class CustomEventMessageSerializer implements Serializer<EventMessage>
+		configMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, CustomEventMessageDeserializer.class);
+			-> public class CustomEventMessageDeserializer implements Deserializer<EventMessage>
+
+7). Printing key, paritions details of TOPIC
+---------------------------------------------------
+
+	> ./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic my-replicated-demo-topic --property print.key=true --property key.separator="{key}=" --from-beginning  
+	
+		
+	./kafka-consumer-groups.sh  --bootstrap-server localhost:9092 --list
+			selvanta@INMLP3JAHTD8 bin % ./kafka-consumer-groups.sh  --bootstrap-server localhost:9092 --list
+			my-replicated-demo-topic.batch.group
+			console-consumer-66735
+			my-replicated-demo-topic-reply
+			my-replicated-demo-topic
+			console-consumer-98514
+			reply-topic
+			selvanta@INMLP3JAHTD8 bin % 
+			
+	
+	./kafka-consumer-groups.sh  --bootstrap-server localhost:9092  --group my-replicated-demo-topic.batch.group --describe
+	
+	selvanta@INMLP3JAHTD8 bin % ./kafka-consumer-groups.sh  --bootstrap-server localhost:9092  --group my-replicated-demo-topic-group --describe     
+
+		GROUP                          TOPIC                    PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                                                    HOST            CLIENT-ID
+		my-replicated-demo-topic-group my-replicated-demo-topic 0          -               11              -               consumer-my-replicated-demo-topic-group-1-f5f22f48-61e1-43da-92b4-36720b3ddb5d /172.29.200.28  consumer-my-replicated-demo-topic-group-1
+		my-replicated-demo-topic-group my-replicated-demo-topic 1          -               0               -               consumer-my-replicated-demo-topic-group-1-f5f22f48-61e1-43da-92b4-36720b3ddb5d /172.29.200.28  consumer-my-replicated-demo-topic-group-1
+		my-replicated-demo-topic-group my-replicated-demo-topic 2          -               1               -               consumer-my-replicated-demo-topic-group-1-f5f22f48-61e1-43da-92b4-36720b3ddb5d /172.29.200.28  consumer-my-replicated-demo-topic-group-1
+	
+		
+	
+		Started consuming........ 12
+		Consumed =>>>>> offset = 0, key = 1, value = Message-1-1580709344206, parition = 0
+		Consumed =>>>>> offset = 1, key = 1, value = Message-same-key-1580710046403, parition = 0
+		Consumed =>>>>> offset = 2, key = 1, value = Message-same-key-1580710046836, parition = 0
+		Consumed =>>>>> offset = 3, key = 1, value = Message-same-key-1580713307921, parition = 0
+		Consumed =>>>>> offset = 4, key = 1, value = Message-same-key-1580713308231, parition = 0
+		Consumed =>>>>> offset = 5, key = 1, value = Message-same-key-1580714310033, parition = 0
+		Consumed =>>>>> offset = 6, key = 1, value = Message-same-key-1580714310331, parition = 0
+		Consumed =>>>>> offset = 7, key = 1, value = Message-same-key-1580714318499, parition = 0
+		Consumed =>>>>> offset = 8, key = 1, value = Message-same-key-1580714318797, parition = 0
+		Consumed =>>>>> offset = 9, key = 1, value = Message-same-key-1580714336975, parition = 0
+		Consumed =>>>>> offset = 10, key = 1, value = Message-same-key-1580714337288, parition = 0
+		Consumed =>>>>> offset = 0, key = 2, value = Message-2-1580709344646, parition = 2
+		
+		Note: The Key serialzer generates same key, due to that all messages are going to same paritions.. Key is not mandatory one.
+
+8). Delete a message from Topic
+---------------------------------
+	1) ./kafka-delete-records.sh --bootstrap-server localhost:9092 --offset-json-file ./offset-input.json
+
+			{"partitions": [{"topic": "mytest", "partition": 0, "offset": 90}], "version":1 }
+			
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Spring-Kafa
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+1). Producer Callback - Sync (Block)
+----------------------------------------
+public void sendToKafka(final MyOutputData data) {
+    final ProducerRecord<String, String> record = createRecord(data);
+
+    try {
+        template.send(record).get(10, TimeUnit.SECONDS);
+        handleSuccess(data);
+    }
+    catch (ExecutionException e) {
+        handleFailure(data, record, e.getCause());
+    }
+    catch (TimeoutException | InterruptedException e) {
+        handleFailure(data, record, e);
+    }
+}
+
+2). Producer Callback -  Aysnc (Non-Blocking)
+-------------------------------------------------
+	
+		ListenableFuture<SendResult<String, String>> future = kafkaTemplate.send(topic, payload.getPayload().toString());
+		
+		future.addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
+		    @Override
+		    public void onSuccess(SendResult<String, String> result) {
+		    	LOGGER.info(">>> Success call back[{}]", result);
+				handleResponse(result);
+		    }
+
+		    @Override
+		    public void onFailure(Throwable ex) {
+		    	LOGGER.info(">>> Failure call back[{}]", ex.getMessage());
+		    }
+
+		});
+		
+3). Manual ACK - ACK of consumed message is handled by Client. Once it is ACK-ed then only the OFFSET reference of the consumer group is updated in zookeeper -- OFFSET Commit
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ The below value will be set at consumer Container level
+ 		// factory.getContainerProperties().setAckMode(AckMode.MANUAL);
+ 
+		RECORD: Commit the offset when the listener returns after processing the record.
+
+		BATCH: Commit the offset when all the records returned by the poll() have been processed.
+
+		TIME: Commit the offset when all the records returned by the poll() have been processed, as long as the ackTime since the last commit has been exceeded.
+
+		COUNT: Commit the offset when all the records returned by the poll() have been processed, as long as ackCount records have been received since the last commit.
+
+		COUNT_TIME: Similar to TIME and COUNT, but the commit is performed if either condition is true.
+
+		MANUAL: The message listener is responsible to acknowledge() the Acknowledgment. After that, the same semantics as BATCH are applied.
+
+		MANUAL_IMMEDIATE: Commit the offset immediately when the Acknowledgment.acknowledge() method is called by the listener.
+		
+S1). configMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+S2). @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        // These attributes cann be overridden @KafkaListener annotation
+        factory.getContainerProperties().setAckMode(AckMode.MANUAL); // By setting AckMode Manual you can get the reference of Ack in the listener method args.
+        factory.setConsumerFactory(consumerFactory());
+        factory.setConcurrency(3);
+        return factory;
+        
+    }
+
+S3). You can have Acknowledgment argument only in case of set the ACK mode to Manual
+
+	@KafkaListener(id = "${kaffa.topic.group.id}", 		topics = "${kafka.topic}",
+			
+				autoStartup = "${listen.auto.start:true}", 	concurrency = "${listen.concurrency:3}",
+				containerFactory = "kafkaListenerContainerFactory")
+	
+		public void listen(@Payload String payload, @Header(KafkaHeaders.RECEIVED_MESSAGE_KEY) String key,
+										        @Header(KafkaHeaders.RECEIVED_PARTITION_ID) int partition,
+										        @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+										        @Header(KafkaHeaders.RECEIVED_TIMESTAMP) long ts,
+										        @Header(KafkaHeaders.OFFSET) long offset
+									        
+										        ,Acknowledgment ack
+										        ) {
+		
+			LOGGER.info("Message consumed from topic [{}] and payload[{}]", topic, payload);
+			LOGGER.info("Received message info offset[{}], Parition[{}], key[{}], timestamp[{}] and Ack[{}]", offset, partition, key, ack);
+			//LOGGER.info("Received message info offset[{}], Parition[{}], key[{}], timestamp[{}] and Ack[{}]", offset, partition, key);
+			//ack.acknowledge();
+		}
+
+S4) Output : Every time the consumer reads message with OLD offset reference. OFFSET will not be updated for the consumer with Group ID until Acknowledged.
+--------------------------------
+2020-02-04 12:18:35.421  INFO 66096 --- [pic-reply-1-C-1] c.e.c.KafaMessageListenerConfiguration   : Message consumed from topic [my-replicated-demo-topic] and payload[My-Test-message KafkaMessageListenerConfigDemoApplication]
+2020-02-04 12:18:35.422  INFO 66096 --- [pic-reply-1-C-1] c.e.c.KafaMessageListenerConfiguration   : Received message info offset[17], Parition[1], key[listener-key], timestamp[Acknowledgment for ConsumerRecord(topic = my-replicated-demo-topic, partition = 1, leaderEpoch = 15, offset = 17, CreateTime = 1580798870183, serialized key size = 12, serialized value size = 57, headers = RecordHeaders(headers = [], isReadOnly = false), key = listener-key, value = My-Test-message KafkaMessageListenerConfigDemoApplication)] and Ack[{}]
+2020-02-04 12:18:35.422  INFO 66096 --- [pic-reply-1-C-1] c.e.c.KafaMessageListenerConfiguration   : Message consumed from topic [my-replicated-demo-topic] and payload[My-Test-message KafkaMessageListenerConfigDemoApplication]
+2020-02-04 12:18:35.422  INFO 66096 --- [pic-reply-1-C-1] c.e.c.KafaMessageListenerConfiguration   : Received message info offset[18], Parition[1], key[listener-key], timestamp[Acknowledgment for ConsumerRecord(topic = my-replicated-demo-topic, partition = 1, leaderEpoch = 15, offset = 18, CreateTime = 1580798887140, serialized key size = 12, serialized value size = 57, headers = RecordHeaders(headers = [], isReadOnly = false), key = listener-key, value = My-Test-message KafkaMessageListenerConfigDemoApplication)] and Ack[{}]
+
+
+S5). The Listener method you can specify Paritions & offset details when you want to pull from specifically
+------------------------------------------------------
+		@KafkaListener(id = "thing2", topicPartitions =
+		        { @TopicPartition(topic = "topic1", partitions = { "0", "1" }),
+		          @TopicPartition(topic = "topic2", partitions = "0",
+		             partitionOffsets = @PartitionOffset(partition = "1", initialOffset = "100"))
+		        })
+		public void listen(ConsumerRecord<?, ?> record) {
+		    ...
+		}
+
+S6). Batch Listener
+---------------------------------
+		@Bean
+		    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaBatchListenerContainerFactory() {
+		        ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
+		        // These attributes cann be overridden @KafkaListener annotation
+		        factory.getContainerProperties().setAckMode(AckMode.MANUAL); // By setting AckMode Manual you can get the reference of Ack in the listener method args.
+		        factory.setConsumerFactory(consumerFactory());
+		        factory.setConcurrency(3);
+		        factory.setBatchListener(true);    /// Enabling Batch
+		        return factory;
+        
+		    }
+			
+		// Batch Listener with different payload - Start
+	
+			@KafkaListener(id = "${kaffa.topic.batch.group.id}", 		topics = "${kafka.topic}",
+					autoStartup = "${listen.auto.start:true}", 			concurrency = "${listen.concurrency:3}",
+					containerFactory = "kafkaBatchListenerContainerFactory")
+			public void listenAsBatch(@Payload List<String> payloadList,
+											        @Header(KafkaHeaders.RECEIVED_PARTITION_ID) List<Integer> partition,
+											        @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+											        @Header(KafkaHeaders.RECEIVED_TIMESTAMP) List<Long> ts,
+											        @Header(KafkaHeaders.OFFSET) List<Long> offset
+											        ,Acknowledgment ack
+											        ) throws Exception {
+				TimeUnit.SECONDS.sleep(5);
+				LOGGER.info(">>> Message list[{}] consumed from topic [{}] and payload[{}]", payloadList.size(), topic, payloadList);
+				LOGGER.info(">>> Received list of message info offset[{}], Parition[{}], key[{}], timestamp[{}] and Ack[{}]", offset, partition, ack);
+				//LOGGER.info("Received message info offset[{}], Parition[{}], key[{}], timestamp[{}] and Ack[{}]", offset, partition, key);
+				//ack.acknowledge();
+			}
+	
+			@KafkaListener(id = "${kaffa.topic.batch.group.id}.LM", 		topics = "${kafka.topic}",
+					autoStartup = "${listen.auto.start:true}", 			concurrency = "${listen.concurrency:3}",
+					containerFactory = "kafkaBatchListenerContainerFactory")
+			public void listenAsBatchMessage(@Payload List<Message<?>> payloadList, Acknowledgment ack) throws Exception {
+				TimeUnit.SECONDS.sleep(5);
+				LOGGER.info(">>> Message(Batch-Message)  list[{}] consumed from topic [{}] and payload[{}]", payloadList.size(), topic, payloadList);
+				//LOGGER.info("Received message info offset[{}], Parition[{}], key[{}], timestamp[{}] and Ack[{}]", offset, partition, key);
+				//ack.acknowledge();
+			}
+	
+			@KafkaListener(id = "${kaffa.topic.batch.group.id}.CR", 		topics = "${kafka.topic}",
+					autoStartup = "${listen.auto.start:true}", 			concurrency = "${listen.concurrency:3}",
+					containerFactory = "kafkaBatchListenerContainerFactory")
+			public void listenAsBatchConsumerRecord(@Payload List<ConsumerRecord<String,String>> payloadList, Acknowledgment ack) throws Exception {
+				TimeUnit.SECONDS.sleep(5);
+				LOGGER.info(">>> Message(Consumer_Record)  list[{}] consumed from topic [{}] and payload[{}]", payloadList.size(), topic, payloadList);
+				//LOGGER.info("Received message info offset[{}], Parition[{}], key[{}], timestamp[{}] and Ack[{}]", offset, partition, key);
+				//ack.acknowledge();
+			}
+			// Batch Listener with different payload - End
+			
+S7). Thread name (programatically) - [emo-topic-2-C-1] [-XXX-topic-partition #-consumer -consumer#]
+--------------------------------------------------------------
+2020-02-05 12:43:25.114  INFO 95611 --- [emo-topic-2-C-1]  c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-2]] - (-2 is partition)
+2020-02-05 12:43:25.340  INFO 95611 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-1]]- (-1 is partition)
+2020-02-05 12:43:25.537  INFO 95611 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-0]]- (-0 is partition)
+
+
+S8). Partitions Rebalancing
+------------------------------
+ 	- When we have 1 consumer, all  paritions are assinged to same consumer
+	- When we start 2-nd consumer, all the assinged partitions will be release and reassignment happens.
+	- When we start 3-rd consumerm, same thing happens.
+
+- Starting of consumer 1
+-------------------------
+// While assigning
+2020-02-05 12:56:42.027  INFO 96428 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-1]]
+2020-02-05 12:56:42.027  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-0]]
+2020-02-05 12:56:42.028  INFO 96428 --- [emo-topic-2-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-2]]
+
+
+- Starting of consumer 2
+-------------------------
+Log of consumer 1
+-------------------
+// Removing all the partition assignment before commit
+2020-02-05 12:57:08.982  INFO 96428 --- [emo-topic-2-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedBeforeCommit[[my-replicated-demo-topic-2]]
+2020-02-05 12:57:08.982  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedBeforeCommit[[my-replicated-demo-topic-0]]
+2020-02-05 12:57:08.982  INFO 96428 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedBeforeCommit[[my-replicated-demo-topic-1]]
+
+// Removing all the partition assignment after commit
+2020-02-05 12:57:08.982  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedAfterCommit[[my-replicated-demo-topic-0]]
+2020-02-05 12:57:08.982  INFO 96428 --- [emo-topic-2-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedAfterCommit[[my-replicated-demo-topic-2]]
+2020-02-05 12:57:08.982  INFO 96428 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedAfterCommit[[my-replicated-demo-topic-1]]
+
+// Reassignment - only partition 0 is assigned to Consumer -1
+2020-02-05 12:57:08.991  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-0]]
+
+
+Log of consumer 2
+-------------------
+// 2 parition assigned to consumer 2
+2020-02-05 12:57:09.005  INFO 96432 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-2]]
+2020-02-05 12:57:09.005  INFO 96432 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-1]]
+
+
+- starting consumer 3
+---------------------------
+Log of consumer 1
+-----------------
+// Released the assinged parition 0
+2020-02-05 12:59:27.112  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedBeforeCommit[[my-replicated-demo-topic-0]]
+2020-02-05 12:59:27.113  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedAfterCommit[[my-replicated-demo-topic-0]]
+
+// Now assinged P-1
+2020-02-05 12:59:27.131  INFO 96428 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-1]]
+
+
+Log of consumer 2
+-----------------
+// Released the assinged parition 2 & 1 while starting the Conumser 2 (refere consumer 2 log) 
+2020-02-05 12:59:27.080  INFO 96432 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedBeforeCommit[[my-replicated-demo-topic-2]]
+2020-02-05 12:59:27.081  INFO 96432 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedAfterCommit[[my-replicated-demo-topic-2]]
+
+2020-02-05 12:59:27.098  INFO 96432 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedBeforeCommit[[my-replicated-demo-topic-1]]
+2020-02-05 12:59:27.098  INFO 96432 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsRevokedAfterCommit[[my-replicated-demo-topic-1]]
+
+// Now assinged P-2
+2020-02-05 12:59:27.132  INFO 96432 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-2]]
+
+
+Log of consumer 3
+----------------
+// Now assinged P-0 // Refer thread name
+2020-02-05 12:59:27.150  INFO 96455 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned[[my-replicated-demo-topic-0]]
+
+Note:   Same actions will be reversed when you shutdown the instances as well.
+-----
+
+
+ Check the assigned partitions via script
+-------------------------------------------- 
+selvanta@INMLP3JAHTD8 bin % ./kafka-consumer-groups.sh  --bootstrap-server localhost:9092  --group my-replicated-demo-topic --describe
+
+GROUP                    TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                                              HOST            CLIENT-ID
+my-replicated-demo-topic my-replicated-demo-topic       2          0               4               4               consumer-my-replicated-demo-topic-1-cbf11866-bfbf-48b8-86a0-6ccb89b02b5d /10.1.9.208     consumer-my-replicated-demo-topic-1
+my-replicated-demo-topic my-replicated-demo-topic       0          0               11              11              consumer-my-replicated-demo-topic-1-0bea619a-cd43-4a6d-9278-1b3e9bdd75c3 /10.1.9.208     consumer-my-replicated-demo-topic-1
+my-replicated-demo-topic my-replicated-demo-topic       1          0               19              19              consumer-my-replicated-demo-topic-1-9eeda76d-f54d-40f2-8fad-595aee4798b6 /10.1.9.208     consumer-my-replicated-demo-topic-1
+
+
+	In Java assignment - 
+	-------------------
+	- Start consumer-1
+	- start consumer-2
+	The below output is from "onPartitionsAssigned" method in ConsumerAwareRebalanceListener.
+
+2020-02-05 14:25:28.313  INFO 98880 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned partitions[[my-replicated-demo-topic-2]]
+2020-02-05 14:25:28.314  INFO 98880 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned currentoffset[{my-replicated-demo-topic-0=OffsetAndMetadata{offset=10, leaderEpoch=null, metadata='Commit'}, my-replicated-demo-topic-1=OffsetAndMetadata{offset=18, leaderEpoch=null, metadata='Commit'}, my-replicated-demo-topic-2=OffsetAndMetadata{offset=3, leaderEpoch=null, metadata='Commit'}}]
+2020-02-05 14:25:28.314  INFO 98880 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Inside onPartitionsAssigned partitions[[my-replicated-demo-topic-0]]
+2020-02-05 14:25:36.785  INFO 98880 --- [emo-topic-1-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Assigning partition[my-replicated-demo-topic-2] and offset[OffsetAndMetadata{offset=3, leaderEpoch=null, metadata='Commit'}]
+2020-02-05 14:27:22.680  INFO 98880 --- [emo-topic-0-C-1] c.e.c.ConsumerAwareRebalanceListenerImpl : Assigning partition[my-replicated-demo-topic-0] and offset[OffsetAndMetadata{offset=10, leaderEpoch=null, metadata='Commit'}]
+
+S9). SendTo -Reply Semantics (forward from one topic to another topic)
+-------------------------------------------------------------------------
+	- set  factory.setReplyTemplate(kafkaTemplate);
+	- Any header filter & addtiional header can be configured via below....
+	
+	factory.setReplyHeadersConfigurer(new ReplyHeadersConfigurer() {
+        	@Override
+        	public boolean shouldCopy(String headerName, Object headerValue) {
+        		LOGGER.info("Blindflod copy ...header[{}] and value[{}]" + headerName , headerValue);
+        		return true;
+        	}
+        	@Override
+        	public Map<String, Object> additionalHeaders() {
+        		LOGGER.info("Additional Header ");
+        		return Collections.singletonMap("customer-header", "custom-value");
+        		
+        	}
+        });
+
+	- @SendTo("#{kafaSend2ListenerConfiguration.sendToTopic}")
+
+S10). MessageFilterStrategy (Filter the message once it is consumed from container)
+--------------------------------------------------------------------------------------
+	- factory.setRecordFilterStrategy(new RecordFilterStrategy<String,String>() {
+        	@Override
+        	public boolean filter(ConsumerRecord<String,String> consumerRecord) {
+        		//consumerRecord.headers().add("ackDiscarded", String.valueOf(true).getBytes());
+        		LOGGER.info("Messages is ignored topic[{}] and payload[{}]",topic, consumerRecord.value());
+        		return true;
+        	}
+        });
+			
+S11). Event Listener
+--------------------------
+	- Event log format
+		-> event[ListenerContainerIdleEvent [idleTime=10.013s, listenerId=my-replicated-demo-topic-0, container=KafkaMessageListenerContainer [id=my-replicated-demo-topic-0, clientIndex=-0, topicPartitions=[my-replicated-demo-topic-0]], paused=false, topicPartitions=[my-replicated-demo-topic-0]]]
+	- factory.getContainerProperties().setIdleEventInterval(TimeUnit.SECONDS.toMillis(10));
+
+S12). Interceptor - Producer / Consumer
+------------------------------------------
+	- // Interceptor config
+		configMap.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, Interceptor.class.getName());
+		configMap.put("producer.bean", new InterceptorBean());
+		configMap.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, Interceptor.class.getName());
+		configMap.put("consumer.bean", new InterceptorBean());
+		
+	- public class Interceptor implements ProducerInterceptor<String,String>, ConsumerInterceptor<String,String>
+	
+S13). Transaction
+----------------------
+	- Create KAFKA transction manager
+	- Create JDBC transaction manager.
+	- Using ChainedKafkaTransactionManager, we can inject any no of transaction manager
+	- Below are the transaction related attributes
+		- configMap.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+		- producerFactory.setTransactionIdPrefix("tamil-tx");
+		- KafkaTransactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+		
+		OR
+				
+		- spring.kafka.consumer.properties.isolation.level=read_committed
+		- spring.kafka.producer.transaction-id-prefix=tamil-tx
+		- logging.level.org.springframework.transaction=ERROR
+		- logging.level.org.springframework.kafka.transaction=ERROR
+		- logging.level.org.springframework.jdbc=ERROR
+		
+		
+	Example
+	--------
+		@Bean
+	    	public ChainedKafkaTransactionManager<Object, Object> chainedTm(KafkaTransactionManager<String, String> ktm, DataSourceTransactionManager dstm) {
+	        	return new ChainedKafkaTransactionManager<>(ktm, dstm);
+	    	}
+		
+		@Bean
+		    public DataSourceTransactionManager dstm(DataSource dataSource) {
+		        return new DataSourceTransactionManager(dataSource);
+		    }
+		
+		@Bean
+			public KafkaTransactionManager<String, String> kafkaTransactionManager() {
+			        KafkaTransactionManager<String, String> ktm = new KafkaTransactionManager<String, String>(producerFactory());
+			        ktm.setNestedTransactionAllowed(true);
+			        ktm.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ALWAYS);
+			        return ktm;
+			}
+		@Bean
+			public ProducerFactory<String, String> producerFactory() {
+				DefaultKafkaProducerFactory<String, String> producerFactory =  new DefaultKafkaProducerFactory<>(config());
+				producerFactory.setTransactionIdPrefix("tamil-tx");
+				return producerFactory;
+		//		return new DefaultKafkaProducerFactory<>(config(),new CustomKeySerializer(), new CustomValueSerializer());
+			}
+			
+		// Listener Factory
+		ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
+		factory.getContainerProperties().setTransactionManager((PlatformTransactionManager)chainedTM);
+
+S13). Retry Configuration
+---------------------------------
+	- RetryTemplate should be configured with RetryPolicy & BackoffPolicy.
+	- We can configure retrylistener on the retry template to trace the rettry open, onerror & close.
+	- When all the retries are exhausted then it calls RecoveryCallback.
+	- In the recovery call be we get consumer Record / Acknowledgement object.
+	- Here we can move to another topic / DLX.
+	
+	Auto offset commit / Manual offset commit
+	------------------------------------------
+		- If the consumer factory is configured with Auto ACK mode   then on exeuction of RecoveryCallback-> recover method the offset will be committed.
+		- If the consumer factory is configured with MANUAL ACK mode then on exeuction of RecoveryCallback-> recover method the offset will NOT be committed. To do that, we have to get the Acknowledgment Object and manually ACK the offset.
+		
+		Configuration - 
+		----------------
+		
+			1). - factory.getContainerProperties().setAckMode(AckMode.MANUAL); // IN CASE DO U NEED MANUAL ACK OR YOU DON'T WANT TO COMMIT WHEN AN EXCEPTION (That case Manual ACK is required.)
+			 
+			2). @Bean
+				public RetryTemplate retryTemplate() {
+					  Map<Class<? extends Throwable>, Boolean> retryMapping = new HashMap<>();
+					  retryMapping.put(ListenerExecutionFailedException.class, true);
+		  
+		  
+					  RetryTemplate retryTemplate = new RetryTemplate();
+		  
+					  FixedBackOffPolicy fixedBackOffPolicy = new FixedBackOffPolicy();
+					  fixedBackOffPolicy.setBackOffPeriod(1000l);
+	
+					  SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy(2, retryMapping);
+		  
+					  retryTemplate.setBackOffPolicy(fixedBackOffPolicy);
+					  retryTemplate.setRetryPolicy(retryPolicy);
+		  
+					  retryTemplate.registerListener(new RetryListener() {
+								@Override
+								public <T, E extends Throwable> boolean open(RetryContext context, RetryCallback<T, E> callback) {
+									LOGGER.info("Inside retry-open [{}] & callback[{}]", context, callback);
+									return true;
+								}
+					
+								@Override
+								public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback,
+										Throwable throwable) {
+									LOGGER.info("Inside retry-onError [{}] & callback[{}] & exception[{}]", context, callback, throwable);
+						
+								}
+					
+								@Override
+								public <T, E extends Throwable> void close(RetryContext context, RetryCallback<T, E> callback,
+										Throwable throwable) {
+									LOGGER.info("Inside retry-close [{}] & callback[{}] & exception[{}]", context, callback, throwable);
+						
+								}
+					});
+		  			  return retryTemplate;
+				};
+				
+		 3). - factory.setRecoveryCallback(new RecoveryCallback<String>() {
+        	@Override
+        	public String recover(RetryContext context) throws Exception {
+        		LOGGER.error("Recovery call back...[{}]", context.getLastThrowable());
+                ConsumerRecord<String,String> record = (ConsumerRecord<String,String>) context.getAttribute(RetryingMessageListenerAdapter.CONTEXT_RECORD);
+                //kafkaTemplate.send(record.topic(), record.value());
+                Acknowledgment ack = (Acknowledgment) context.getAttribute
+				(RetryingMessageListenerAdapter.CONTEXT_ACKNOWLEDGMENT);
+				
+                ack.acknowledge();   //////////////////=========>>>>>>>>>>// MANUALLY COMMIT THE OFFSET
+                
+                return null;
+        	}
+        });
+
+
+
+S14). Spring Integration
+---------------------------
+	1). - Outbound Channel Adapter - outbound-channel-adapter
+	--------------------------------------------------------
+		-> Helps to publish Spring integration message to Kafa Topics(With kafa headers)
+		-> Send the Message to "inputToKafka" channel 
+		
+				<int:service-activator input-channel="inputToKafka" ref="producerTransformer" method="process "/>
+		
+				<int-kafka:outbound-channel-adapter id="kafkaOutboundChannelAdapter"
+		                                    kafka-template="kafkaTemplate"
+		                                    auto-startup="false"
+		                                    channel="inputToKafka"
+		                                    topic="${kafka.topic}"
+		                                    sync="false"
+		                                    message-key-expression="'demo-key'"
+		                                    send-failure-channel="errorChannel"
+		                                    send-success-channel="nullChannel"
+		                                    partition-id-expression="0">
+											
+	2). Message-driven Channel Adapter - <int-kafka:message-driven-channel-adapter>
+	-------------------------------------------------------------------------------
+		==> Helps to convert Kafka message to spring integration message
+		
+		<int-kafka:message-driven-channel-adapter
+			        id="kafkaListener"
+			        listener-container="container"
+			        auto-startup="true"
+			        phase="100"
+			        send-timeout="5000"
+			        mode="record"
+			        channel="receiverChannel"
+			        error-channel="errorChannel" />
+		<int:service-activator input-channel="receiverChannel" ref="receiver" method="handleMessage"/>
+		
+		@Override
+			public void handleMessage(Message<?> message) throws MessagingException {
+				LOGGER.info(">>>>>>>>>>>>>>>>>>>>Received message from topic[{}] and payload[{}]", message.getPayload());
+			}
+				
+							
