@@ -1,5 +1,6 @@
 package com.example.config;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,7 +70,6 @@ public class KafaTransactionConfiguration  {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 	
-	
 	@Autowired
 	CustomEventPublisher customEventPublisher;
 	
@@ -121,7 +121,7 @@ public class KafaTransactionConfiguration  {
 	//@Transactional(transactionManager = "chainedKafkaTransactionManager")
 	public void send(String payload) throws Exception {
 		LOGGER.info("..........////////// Message sending to topic [{}] and payload[{}]", topic, payload);
-		jdbcTemplate.update("insert into task(title) values ('" + payload + "')");
+		jdbcTemplate.update("insert into task(title) values ('" + new Date() + "')");
 		
 			// Publishing can not be in transaction becoz the chainedKafkaTransactionManager is between Message consumer & DB.
 		//kafkaTemplate.send(replyTopic, payload);
@@ -136,7 +136,7 @@ public class KafaTransactionConfiguration  {
 		
 	}
 	
-	@Bean
+	@Bean(name="jdbcTemplate")
 	public JdbcTemplate jdbcTemplate(DataSource mysqlDataSource) {
 		return new JdbcTemplate(mysqlDataSource);
 	}
@@ -239,4 +239,13 @@ public class KafaTransactionConfiguration  {
 		return configMap;
 
 	}
+
+	public JdbcTemplate getJdbcTemplate() {
+		return jdbcTemplate;
+	}
+
+	public void setJdbcTemplate(JdbcTemplate jdbcTemplate) {
+		this.jdbcTemplate = jdbcTemplate;
+	}
+	
 }

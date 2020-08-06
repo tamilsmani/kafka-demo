@@ -35,13 +35,13 @@ import com.example.event.CustomEventPublisher;
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaRetryMessageConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaEventMessageConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaProducerConsumerInterceptorConfiguration.class),
-					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaRebalancingListenerConfiguration.class)
+					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaRebalancingListenerConfiguration.class),
 					   })
+// Run your MYSQL server & publish the message to Kafka message system verify the chained transaction
 public class KafkaTranactionDemoApplication {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(KafkaTranactionDemoApplication.class);
 	
-	String name ="hia";
 	@Autowired
 	KafaTransactionConfiguration kafaTransactionConfiguration;
 	
@@ -55,10 +55,9 @@ public class KafkaTranactionDemoApplication {
 		
 		LOGGER.info("Waiting for 10secs to consume all the messages ........ ");
 		TimeUnit.SECONDS.sleep(10);
-		System.out.println(name);
 		//kafaTransactionConfiguration.send(">>>>Sending Transactional message >>>>>>>>>");
 		LOGGER.info("Sleeping for 5 seconds ........ ");
-		TimeUnit.SECONDS.sleep(2000);
+		TimeUnit.SECONDS.sleep(50000);
         
     }
 }
