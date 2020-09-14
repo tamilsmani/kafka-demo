@@ -55,10 +55,11 @@ public class ConsumerAwareRebalanceListenerImpl implements ConsumerAwareRebalanc
 	
 	
 	}
-	@Override
-	public void onPartitionsLost(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
-		LOGGER.info("Inside onPartitionsLost[{}]", partitions);
-	}
+	
+//	@Override
+//	public void onPartitionsLost(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
+//		LOGGER.info("Inside onPartitionsLost[{}]", partitions);
+//	}
 	
 	@Override
 	public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -77,10 +78,10 @@ public class ConsumerAwareRebalanceListenerImpl implements ConsumerAwareRebalanc
 		LOGGER.info("Inside onPartitionsRevokedBeforeCommit[{}]", currentOffsets);
 		
 	}
-	@Override
-	public void onPartitionsLost(Collection<TopicPartition> partitions) {
-		LOGGER.info("Inside onPartitionsLost[{}]", partitions);
-	}
+//	@Override
+//	public void onPartitionsLost(Collection<TopicPartition> partitions) {
+//		LOGGER.info("Inside onPartitionsLost[{}]", partitions);
+//	}
 	@Override
 	public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
 		LOGGER.info("Inside onPartitionsAssigned[{}]", partitions);
