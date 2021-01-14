@@ -221,10 +221,10 @@ public class KafaTransactionDLTConfiguration  {
 	        return ktm;
 	}
 	
-	@Bean
-    public DataSourceTransactionManager dstm(DataSource dataSource) {
-        return new DataSourceTransactionManager(dataSource);
-    }
+//	@Bean
+//    public DataSourceTransactionManager dstm(DataSource dataSource) {
+//        return new DataSourceTransactionManager(dataSource);
+//    }
 	
 	@Bean
     public ConsumerFactory<String, String> consumerFactory() {
