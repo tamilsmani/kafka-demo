@@ -6,13 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.ImportResource;
 
 import com.example.config.KafaConfiguration;
 import com.example.config.KafaEventMessageConfiguration;
@@ -28,12 +26,11 @@ import com.example.config.KafaTransactionDLTConfiguration;
 import com.example.event.CustomEventListener;
 import com.example.event.CustomEventPublisher;
 
-@SpringBootApplication(exclude = {
-	    DataSourceAutoConfiguration.class, 
-	    DataSourceTransactionManagerAutoConfiguration.class, 
-	    HibernateJpaAutoConfiguration.class
-	})
-@ComponentScan(basePackageClasses = { KafaTransactionConfiguration.class ,CustomEventListener.class, CustomEventPublisher.class}, 
+@SpringBootApplication
+@ImportResource({
+	"classpath:jpa-persistence-context.xml"
+})
+@ComponentScan(basePackageClasses = { KafaTransactionDLTConfiguration.class ,CustomEventListener.class, CustomEventPublisher.class}, 
 			   excludeFilters={ 
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaMessageListenerConfiguration.class),
@@ -42,29 +39,28 @@ import com.example.event.CustomEventPublisher;
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaMessageFilterConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaRetryMessageConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaEventMessageConfiguration.class),
+					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaTransactionConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaProducerConsumerInterceptorConfiguration.class),
-					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaTransactionDLTConfiguration.class),
 					   @ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE, value=KafaRebalancingListenerConfiguration.class),
 					   })
-// Run your MYSQL server & publish the message to Kafka message system verify the chained transaction
-public class KafkaTranactionDemoApplication {
+public class KafkaTranactionDemoDLTApplication {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(KafkaTranactionDemoApplication.class);
 	
 	@Autowired
-	KafaTransactionConfiguration kafaTransactionConfiguration;
+	KafaTransactionDLTConfiguration kafaTransactionDLTConfiguration;
 	
 	public static void main(String[] args) throws Exception {
-		ConfigurableApplicationContext context = new SpringApplicationBuilder(KafkaTranactionDemoApplication.class).run(args);
-        context.getBean(KafkaTranactionDemoApplication.class).run(context);
+		ConfigurableApplicationContext context = new SpringApplicationBuilder(KafkaTranactionDemoDLTApplication.class).run(args);
+        context.getBean(KafkaTranactionDemoDLTApplication.class).run(context);
         context.close();
 	}
 
 	private void run(ConfigurableApplicationContext context) throws Exception {
 		
-		LOGGER.info("Waiting for 10secs to consume all the messages ........ ");
+		LOGGER.info("Transaction with DLT example ........ ");
 		TimeUnit.SECONDS.sleep(10);
-		kafaTransactionConfiguration.send(">>>>Sending Transactional message >>>>>>>>>");
+		//kafaTransactionConfiguration.send(">>>>Sending Transactional message >>>>>>>>>");
 		LOGGER.info("Sleeping for 5 seconds ........ ");
 		TimeUnit.SECONDS.sleep(50000);
         
